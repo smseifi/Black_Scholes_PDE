@@ -1,0 +1,57 @@
+function [tVect, soln]= myFun(S, K, L, T, initDt, e, dnorm)
+% Description of myFun goes here
+%   Detailed description of myfun goes here
+
+m = size(S, 1);
+n = 5*T/initDt;
+
+astV = chooserPayoff(S, K);
+soln = zeros(m, n+1);   soln(:, n+1) = astV;
+tVect = ones(n+1, 1);  tVect(n+1, 1) = T;
+dt = initDt;
+nn = 0;
+while T > 0
+    nn = nn+1;
+    T = T-dt;
+    tVect(end-nn, 1) = T;
+    oldV = soln(:, n+2-nn);
+    barP = pnlty(oldV, astV, e);
+    if nn < 3
+        newV = (eye(m, m) - dt*L + diag(barP)) \ (oldV + diag(barP)*astV);
+        
+        while max(abs(newV - oldV) ./ max(1, abs(newV))) >= e
+            oldV = newV;
+            barP = pnlty(oldV, astV, e);
+            newV = (eye(m, m) - dt*L + diag(barP)) \ (soln(:, n+2-nn)...
+                + diag(barP)*astV);
+        end
+        soln(:, n+1-nn) = newV;
+        dt = dt * slctr(dnorm, soln(:, n+2-nn), newV, 1);
+    else
+        newV = (eye(m, m) - 5e-1*dt*L + diag(barP)) \ ((eye(m, m) + ...
+            5e-1*dt*L) * oldV + diag(barP)*astV);
+        while max(abs(newV - oldV) ./ max(1, abs(newV))) >= e
+            oldV = newV;
+            barP = pnlty(oldV, astV, e);
+            newV = (eye(m, m) - 5e-1*dt*L + diag(barP)) \ ((eye(m, m) + ...
+                5e-1*dt*L) * soln(:, n+2-nn) + diag(barP)*astV);
+        end
+        
+        soln(:, n+1-nn) = newV;
+        dt = dt * slctr(dnorm, soln(:, n+2-nn), newV, 1);
+        dt = min(dt, T);
+    end
+end
+end
+
+function p = pnlty(a, b, eps)
+
+p = zeros(size(a));
+p(a < b) = 1/eps;
+end
+
+function c = slctr(dnorm, a, b, d)
+
+chg = max(abs(b - a) ./ max(d, max(abs(a), abs(b))));
+c = dnorm/chg;
+end
