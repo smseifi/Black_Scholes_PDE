@@ -1,0 +1,308 @@
+%% ----- 1. Finite Difference, Constant Timesteps, European ------------- % 
+% ----------------------------------------------------------------------- %
+clc
+clear variables
+close all
+
+% ----------------------------------------------------------------------- %
+% ----- Specifying Finite Difference solver ----------------------------- %
+c = input(['Choose one of the following time-stepping schemes' ... 
+'\n 1: Implicit time-stepping \n 2: Crank--Nicolson time-stepping' ...    
+'\n 3: Crank--Nicolson--Rannacher time-stepping \n']);
+
+switch c
+    case 1
+        fdSolve = @(V, L, dt, n) implicit(V, L, dt, n);
+    case 2
+        fdSolve = @(V, L, dt, n) cn(V, L, dt, n);
+    case 3
+        fdSolve = @(V, L, dt, n) cnr(V, L, dt, n);
+end
+
+% ----------------------------------------------------------------------- %
+% ----- Specifying option's parameters ---------------------------------- %
+S_zero = 5e+1;  K = 5e+1;
+T = 75e-2;
+r = 2e-2;   localVolFun = @(S) 85e-2./sqrt(S);
+
+% ----------------------------------------------------------------------- %
+% ----- Setting up convergence test ------------------------------------- %
+load coarse_mesh.mat
+
+nn = 5;
+nVect = 25 * 2.^(0:nn).';
+initDtVect = T./nVect; 
+
+mVect = zeros(nn+1, 1); mVect(1, 1) = size(S_NVect, 1);
+ATM = zeros(nn+1, 1);
+
+initDt = initDtVect(1, 1);    n = nVect(1, 1);
+V_N = chooserPayoff(S_NVect, K);
+sigma = localVolFun(S_NVect);
+L = discreteBls(S_NVect, r, sigma);
+Value = fdSolve(V_N, L, initDt, n);
+
+ATM(1, 1) = Value(S_NVect==S_zero, 1);
+for i = 2:nn+1
+    n =nVect(i, 1); initDt = initDtVect(i, 1); 
+    m = size(S_NVect, 1);
+    S = zeros(2*m-1, 1);
+    mVect(i, 1) = 2*m-1;
+    S(1:2:end, 1) = S_NVect;
+    S(2:2:end, 1) = (S_NVect(2:end, 1) + S_NVect(1:end-1, 1))/2;
+    V_N = chooserPayoff(S, K);
+    sigma = localVolFun(S);
+    L = discreteBls(S, r, sigma);
+    Value = fdSolve(V_N, L,initDt, n);
+    ATM(i, 1) = Value(S==S_zero, 1);
+    S_NVect = S;
+end
+
+% ----------------------------------------------------------------------- %
+% ----- convergence test result ----------------------------------------- %
+change = diff(ATM); ratio = change(1:nn-1) ./ change(2:nn);
+change = [nan; change]; ratio = [nan*ones(2, 1); ratio];
+
+tb1 = table(mVect, nVect, ATM, change, ratio, 'VariableNames', ...
+    {'Nodes', 'Time Stamps', 'ATM Chooser Value', 'Change', 'Ratio'});
+disp(tb1)
+
+% ----------------------------------------------------------------------- %
+% ----- Computing Sensitivities ----------------------------------------- %
+[delta, gamma] = greeks(Value, S);
+
+% ----------------------------------------------------------------------- %
+% ----- Plotting results on the fine mesh ------------------------------- %
+[TT, SS] = meshgrid(linspace(0, T, n+1), S);
+
+figure(1)
+s1 = surf(TT, SS, Value);
+colormap(summer)
+s1.EdgeColor = 'yellow';
+s1.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('V',  'Interpreter', 'latex')
+ylim([5e-1, 15e-1]*S_zero)
+zlim([0, 27.5])
+
+figure(2)
+s2 = surf(TT, SS, delta);
+colormap(summer)
+s2.EdgeColor = 'yellow';
+s2.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('$\delta$',  'Interpreter', 'latex')
+ylim([5e-1, 15e-1]*S_zero)
+
+figure(3)
+s3 = surf(TT, SS, gamma);
+colormap(summer)
+s3.EdgeColor = 'yellow';
+s3.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('$\gamma$',  'Interpreter', 'latex')
+
+ylim([5e-1, 15e-1]*S_zero)
+zlim([0, 1])
+
+%% ----- 2. Finite Difference, Constant Timesteps, American ------------- % 
+% ----------------------------------------------------------------------- %
+
+clc
+clear variables
+close all
+
+% ----------------------------------------------------------------------- %
+% ----- Specifying option's parameters ---------------------------------- %
+S_zero = 5e+1;  K = 5e+1;
+T = 75e-2;
+r = 2e-2;   localVolFun = @(S) 85e-2./sqrt(S);
+
+% ----------------------------------------------------------------------- %
+% ----- Setting up convergence test ------------------------------------- %
+load coarse_mesh.mat
+
+nn = 5;
+nVect = 25 * 2.^(0:nn).';
+initDtVect = T./nVect; 
+
+mVect = zeros(nn+1, 1); mVect(1, 1) = size(S_NVect, 1);
+ATM = zeros(nn+1, 1);
+
+initDt = initDtVect(1, 1);    n = nVect(1, 1);
+sigma = localVolFun(S_NVect);
+L = discreteBls(S_NVect, r, sigma);
+Value = penCnr(S_NVect, K, L, initDt, n, 1e-8);
+
+ATM(1, 1) = Value(S_NVect==S_zero, 1);
+for i = 2:nn+1
+    n =nVect(i, 1); initDt = initDtVect(i, 1); 
+    m = size(S_NVect, 1);
+    S = zeros(2*m-1, 1);
+    mVect(i, 1) = 2*m-1;
+    S(1:2:end, 1) = S_NVect;
+    S(2:2:end, 1) = (S_NVect(2:end, 1) + S_NVect(1:end-1, 1))/2;
+    sigma = localVolFun(S);
+    L = discreteBls(S, r, sigma);
+    Value = penCnr(S, K, L, initDt, n, 1e-8);
+    ATM(i, 1) = Value(S==S_zero, 1);
+    S_NVect = S;
+end
+
+% ----------------------------------------------------------------------- %
+% ----- convergence test result ----------------------------------------- %
+change = diff(ATM); ratio = change(1:nn-1) ./ change(2:nn);
+change = [nan; change]; ratio = [nan*ones(2, 1); ratio];
+
+tb2 = table(mVect, nVect, ATM, change, ratio, 'VariableNames', ...
+    {'Nodes', 'Time Stamps', 'ATM Chooser Value', 'Change', 'Ratio'});
+disp(tb2)
+
+% ----------------------------------------------------------------------- %
+% ----- Computing Sensitivities ----------------------------------------- %
+[delta, gamma] = greeks(Value, S);
+
+% ----------------------------------------------------------------------- %
+% ----- Plotting results on the fine mesh ------------------------------- %
+[TT, SS] = meshgrid(linspace(0, T, n+1), S);
+
+figure(4)
+s4 = surf(TT, SS, Value);
+colormap(pink)
+s4.EdgeColor = 'red';
+s4.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('V',  'Interpreter', 'latex')
+ylim([5e-1, 15e-1]*S_zero)
+zlim([0, 27.5])
+
+figure(5)
+s5 = surf(TT, SS, delta);
+colormap(pink)
+s5.EdgeColor = 'red';
+s5.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('$\delta$',  'Interpreter', 'latex')
+ylim([5e-1, 15e-1]*S_zero)
+
+figure(6)
+s6 = surf(TT, SS, gamma);
+colormap(pink)
+s6.EdgeColor = 'red';
+s6.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('$\gamma$',  'Interpreter', 'latex')
+
+ylim([5e-1, 15e-1]*S_zero)
+zlim([0, 1])
+
+%% ----- 2. Finite Difference, Variable Timesteps, American ------------- % 
+% ----------------------------------------------------------------------- %
+
+clc
+clear variables
+close all
+
+% ----------------------------------------------------------------------- %
+% ----- Specifying option's parameters ---------------------------------- %
+S_zero = 5e+1;  K = 5e+1;
+T = 75e-2;
+r = 2e-2;   localVolFun = @(S) 85e-2./sqrt(S);
+
+% ----------------------------------------------------------------------- %
+% ----- Setting up convergence test ------------------------------------- %
+load coarse_mesh.mat
+
+nn = 5;
+nVect = 25 * 4.^(0:nn).';
+initDtVect = T./nVect;
+dnormVect = 1e-1 * 2.^-(0:nn).';
+
+mVect = zeros(nn+1, 1); mVect(1, 1) = size(S_NVect, 1);
+ATM = zeros(nn+1, 1);
+tlVect = zeros(nn, 1);
+
+initDt = initDtVect(1, 1);  dnorm = dnormVect(1, 1);  
+V_N = chooserPayoff(S_NVect, K);
+sigma = localVolFun(S_NVect);
+L = discreteBls(S_NVect, r, sigma);
+[tVect, Value] = myFun(S_NVect, K, L, T, initDt, 1e-8, dnorm);
+tlVect(1, 1) = size(tVect, 1);
+
+ATM(1, 1) = Value(S_NVect==S_zero, 1);
+for i = 2:nn+1
+    initDt = initDtVect(i, 1);  dnorm = dnormVect(i, 1);
+    m = size(S_NVect, 1);
+    S = zeros(2*m-1, 1);
+    mVect(i, 1) = 2*m-1;
+    S(1:2:end, 1) = S_NVect;
+    S(2:2:end, 1) = (S_NVect(2:end, 1) + S_NVect(1:end-1, 1))/2;
+    V_N = chooserPayoff(S, K);
+    sigma = localVolFun(S);
+    L = discreteBls(S, r, sigma);
+    [tVect, Value] = myFun(S, K, L, T, initDt, 1e-8, dnorm);
+    tlVect(i, 1) = size(tVect, 1);
+    ATM(i, 1) = Value(S==S_zero, 1);
+    S_NVect = S;
+end
+
+% ----------------------------------------------------------------------- %
+% ----- convergence test result ----------------------------------------- %
+change = diff(ATM); ratio = change(1:nn-1) ./ change(2:nn);
+change = [nan; change]; ratio = [nan*ones(2, 1); ratio];
+
+tb3 = table(mVect, tlVect, ATM, change, ratio, 'VariableNames', ...
+    {'Nodes', 'Time Stamps', 'ATM Chooser Value', 'Change', 'Ratio'});
+disp(tb3)
+
+% ----------------------------------------------------------------------- %
+% ----- Computing Sensitivities ----------------------------------------- %
+[delta, gamma] = greeks(Value, S);
+
+% ----------------------------------------------------------------------- %
+% ----- Plotting results on the fine mesh ------------------------------- %
+[TT, SS] = meshgrid(tVect, S);
+
+figure(7)
+s7 = surf(TT, SS, Value);
+colormap(pink)
+s7.EdgeColor = 'red';
+s7.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('V',  'Interpreter', 'latex')
+ylim([5e-1, 15e-1]*S_zero)
+zlim([0, 27.5])
+
+figure(8)
+s8 = surf(TT, SS, delta);
+colormap(pink)
+s8.EdgeColor = 'red';
+s8.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('$\delta$',  'Interpreter', 'latex')
+ylim([5e-1, 15e-1]*S_zero)
+
+figure(9)
+s9 = surf(TT, SS, gamma);
+colormap(pink)
+s9.EdgeColor = 'red';
+s9.EdgeAlpha = 5e-2;
+xlabel('t', 'Interpreter', 'latex')
+ylabel('S',  'Interpreter', 'latex')
+zlabel('$\gamma$',  'Interpreter', 'latex')
+
+ylim([5e-1, 15e-1]*S_zero)
+zlim([0, 1])
+
+
+
+
+
